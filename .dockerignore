@@ -1,0 +1,17 @@
+node_modules
+.next
+.git
+.gitignore
+uploads
+*.db
+*.db-journal
+.env
+.env.*
+!.env.example
+README.md
+DEPLOY.md
+*.pdf
+.DS_Store
+npm-debug.log*
+agent-transcripts
+.cursor
