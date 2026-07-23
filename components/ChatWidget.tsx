@@ -46,12 +46,12 @@ export default function ChatWidget({ contextTitle, contextPages }: ChatWidgetPro
 
   return (
     <>
-      <button className="fixed bottom-16 right-6 z-40 rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg" onClick={() => setOpen((value) => !value)}>
+      <button className="fixed bottom-6 right-6 z-40 rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg" onClick={() => setOpen((value) => !value)}>
         {t("chat.askAi")}
       </button>
 
       {open && (
-        <div className="fixed bottom-32 right-6 z-40 w-[360px] rounded-3xl border border-slate-200 bg-white p-4 shadow-xl">
+        <div className="fixed bottom-24 right-6 z-40 w-[360px] rounded-3xl border border-slate-200 bg-white p-4 shadow-xl">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-slate-900">{t("chat.studyChat")}</h3>
             <button className="text-sm text-slate-500" onClick={() => setOpen(false)}>

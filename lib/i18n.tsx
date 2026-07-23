@@ -141,17 +141,6 @@ const dictionary = {
     "contact.sent": "Thanks — your inquiry was sent.",
     "contact.sendFailed": "Couldn’t send your message. Please try again or email me directly.",
     "contact.backHome": "Back to home",
-
-    "footer.feedback": "Feedback",
-    "footer.title": "Send feedback",
-    "footer.description": "Found a bug or have an idea? Let me know.",
-    "footer.emailOptional": "Your email (optional)",
-    "footer.messagePlaceholder": "What's on your mind?",
-    "footer.send": "Send",
-    "footer.sending": "Sending...",
-    "footer.sent": "Thanks for the feedback!",
-    "footer.sendFailed": "Couldn't send feedback. Please try again later.",
-    "footer.close": "Close",
   },
   ko: {
     "header.home": "홈",
@@ -287,17 +276,6 @@ const dictionary = {
     "contact.sent": "문의가 전송되었습니다. 감사합니다.",
     "contact.sendFailed": "전송에 실패했습니다. 잠시 후 다시 시도하거나 이메일로 직접 연락해 주세요.",
     "contact.backHome": "홈으로 돌아가기",
-
-    "footer.feedback": "피드백",
-    "footer.title": "피드백 보내기",
-    "footer.description": "버그를 발견했거나 아이디어가 있으신가요? 알려주세요.",
-    "footer.emailOptional": "이메일 (선택)",
-    "footer.messagePlaceholder": "어떤 내용이든 편하게 남겨주세요",
-    "footer.send": "보내기",
-    "footer.sending": "보내는 중...",
-    "footer.sent": "피드백 감사합니다!",
-    "footer.sendFailed": "피드백을 보내지 못했습니다. 잠시 후 다시 시도해주세요.",
-    "footer.close": "닫기",
   },
 } as const;
 
