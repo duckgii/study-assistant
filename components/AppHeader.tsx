@@ -26,6 +26,12 @@ export default function AppHeader({ title, subtitle, user, right }: AppHeaderPro
         >
           {t("header.home")}
         </Link>
+        <Link
+          href="/contact"
+          className="flex flex-shrink-0 items-center justify-center rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          {t("header.contact")}
+        </Link>
         <div>
           {subtitle && <p className="text-sm font-semibold uppercase tracking-[0.3em] text-blue-600">{subtitle}</p>}
           <h2 className="text-2xl font-semibold text-slate-900">{title}</h2>

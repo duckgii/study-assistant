@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppHeader from "./AppHeader";
+import ContactStrip from "./ContactStrip";
 import { useLanguage, type TranslationKey } from "@/lib/i18n";
 import type { DirectoryListing } from "@/lib/types";
 
@@ -196,6 +197,7 @@ export default function DirectoryBrowser({ user }: DirectoryBrowserProps) {
     <main className="min-h-screen bg-slate-50 px-6 py-8 text-slate-900">
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
         <AppHeader title={t("directory.title")} subtitle={t("directory.subtitle")} user={user} />
+        <ContactStrip />
 
         {listing && (
           <nav className="flex flex-wrap items-center gap-1 text-sm text-slate-500">
