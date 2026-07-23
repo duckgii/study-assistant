@@ -28,6 +28,8 @@ Railway는 **상시 무료가 아닙니다.**
 
 첫 빌드는 LibreOffice 때문에 **10~20분** 걸릴 수 있습니다.
 
+> Dockerfile에 `VOLUME` 지시어를 넣으면 Railway가 빌드를 거절합니다. 디스크는 아래 대시보드 Volume만 사용하세요.
+
 ## 3. Volume 추가 (필수)
 
 서비스 클릭 → **Settings** → **Volumes** → **Add Volume**

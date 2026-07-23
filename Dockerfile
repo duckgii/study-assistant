@@ -75,7 +75,8 @@ USER root
 
 EXPOSE 3000
 
-VOLUME ["/data"]
+# Do not declare Docker VOLUME here — Railway rejects it.
+# Persist /data via Railway Volume (mount path: /data) in the dashboard.
 
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["npm", "run", "start:prod"]
