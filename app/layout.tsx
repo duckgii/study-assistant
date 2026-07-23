@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { LanguageProvider } from "@/lib/i18n";
-import Footer from "@/components/Footer";
+import ContactStrip from "@/components/ContactStrip";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -32,7 +32,11 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <LanguageProvider>
           {children}
-          <Footer />
+          <footer className="mt-auto bg-slate-50 px-6 py-6">
+            <div className="mx-auto max-w-7xl">
+              <ContactStrip />
+            </div>
+          </footer>
         </LanguageProvider>
       </body>
     </html>
