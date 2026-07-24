@@ -74,6 +74,11 @@ export default function StudyFlow({ documentId, user }: StudyFlowProps) {
   const [isPreLearningLoading, setIsPreLearningLoading] = useState(false);
   const preLearningFetchLangRef = useRef<Language | null>(null);
 
+  // Section titles are decided once at upload time and stored as-is — this
+  // holds a display-only translation per language, fetched once per (doc,
+  // language) and layered over the canonical titles wherever they're shown.
+  const [translatedTitlesByLang, setTranslatedTitlesByLang] = useState<Partial<Record<Language, Record<string, string>>>>({});
+
   const [explanationsBySection, setExplanationsBySection] = useState<Record<string, ExplanationData | null>>({});
   const [pageNotesByPage, setPageNotesByPage] = useState<Record<string, string | null>>({});
   const [quizzesBySection, setQuizzesBySection] = useState<Record<string, QuizItem[] | null>>({});
@@ -132,10 +137,54 @@ export default function StudyFlow({ documentId, user }: StudyFlowProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documentId]);
 
+  // Fetches (or re-fetches on a language switch) a display translation for
+  // every section title in the document, once per (doc, language) — cached
+  // client-side, not persisted, since the stored titles stay in whatever
+  // language they were generated in at upload time.
+  useEffect(() => {
+    if (!doc || doc.sections.length === 0) return;
+    if (translatedTitlesByLang[language]) return;
+
+    let cancelled = false;
+    fetch("/api/learn", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mode: "translate-titles",
+        sectionTitle: "",
+        sections: doc.sections.map((section) => ({ id: section.id, title: section.title })),
+        language,
+      }),
+    })
+      .then((response) => response.json())
+      .then((payload) => {
+        if (!cancelled && payload.data) {
+          setTranslatedTitlesByLang((prev) => ({ ...prev, [language]: payload.data }));
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [doc, language, translatedTitlesByLang]);
+
+  const displaySections = useMemo(() => {
+    if (!doc) return [];
+    const map = translatedTitlesByLang[language];
+    if (!map) return doc.sections;
+    return doc.sections.map((section) => (map[section.id] ? { ...section, title: map[section.id] } : section));
+  }, [doc, translatedTitlesByLang, language]);
+
   const rangeSections = useMemo(() => {
     if (!doc) return [];
     return doc.sections.filter((section) => selectedSectionIds.includes(section.id));
   }, [doc, selectedSectionIds]);
+
+  const displayRangeSections = useMemo(
+    () => displaySections.filter((section) => selectedSectionIds.includes(section.id)),
+    [displaySections, selectedSectionIds]
+  );
 
   const rangePageNumbers = useMemo(() => rangeSections.flatMap((section) => section.pageNumbers), [rangeSections]);
 
@@ -143,6 +192,11 @@ export default function StudyFlow({ documentId, user }: StudyFlowProps) {
     if (currentPageNumber === null) return null;
     return rangeSections.find((section) => section.pageNumbers.includes(currentPageNumber)) || null;
   }, [rangeSections, currentPageNumber]);
+
+  const displayCurrentSection = useMemo(() => {
+    if (!currentSection) return null;
+    return displayRangeSections.find((section) => section.id === currentSection.id) || currentSection;
+  }, [currentSection, displayRangeSections]);
 
   const currentPage = useMemo(() => {
     if (currentPageNumber === null || !doc) return null;
@@ -593,23 +647,23 @@ export default function StudyFlow({ documentId, user }: StudyFlowProps) {
         )}
 
         {step === "range-select" && (
-          <StudyRangeSelector filename={doc.filename} pages={doc.pages} sections={doc.sections} onConfirm={handleConfirmRange} />
+          <StudyRangeSelector filename={doc.filename} pages={doc.pages} sections={displaySections} onConfirm={handleConfirmRange} />
         )}
 
         {step === "pre-learning" && <PreLearningCard data={preLearning} isLoading={isPreLearningLoading} onBegin={handleBeginStudying} />}
 
         {step === "viewer" && currentPage && currentSection && explanationKey && quizKey && (
           <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-            <StudySidebar sections={rangeSections} pages={doc.pages} currentPageNumber={currentPageNumber} isReviewActive={false} onSelectPage={handleSelectPage} onSelectReview={() => setStep("review")} />
+            <StudySidebar sections={displayRangeSections} pages={doc.pages} currentPageNumber={currentPageNumber} isReviewActive={false} onSelectPage={handleSelectPage} onSelectReview={() => setStep("review")} />
             <StudyViewer
               page={currentPage}
-              section={currentSection}
+              section={displayCurrentSection || currentSection}
               pageIndexInRange={pageIndexInRange}
               totalPagesInRange={rangePageNumbers.length}
               imageDataUrl={currentPageNumber !== null ? pageImageCache[currentPageNumber] || null : null}
               isImageLoading={isImageLoading}
-              explanation={explanationsBySection[explanationKey] || null}
-              isExplanationLoading={isExplanationLoading}
+              explanation={isLastPageOfSection ? explanationsBySection[explanationKey] || null : null}
+              isExplanationLoading={isLastPageOfSection && isExplanationLoading}
               pageNote={pageKey ? pageNotesByPage[pageKey] ?? null : null}
               quiz={quizzesBySection[quizKey] || null}
               isQuizLoading={isQuizLoading}
@@ -637,7 +691,7 @@ export default function StudyFlow({ documentId, user }: StudyFlowProps) {
 
         {step === "review" && (
           <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-            <StudySidebar sections={rangeSections} pages={doc.pages} currentPageNumber={currentPageNumber} isReviewActive onSelectPage={handleSelectPage} onSelectReview={() => setStep("review")} />
+            <StudySidebar sections={displayRangeSections} pages={doc.pages} currentPageNumber={currentPageNumber} isReviewActive onSelectPage={handleSelectPage} onSelectReview={() => setStep("review")} />
             <ReviewCard
               quiz={reviewQuiz}
               isLoading={isReviewLoading}

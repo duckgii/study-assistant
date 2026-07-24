@@ -53,6 +53,8 @@ export default function DirectoryBrowser({ user }: DirectoryBrowserProps) {
   const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [renamingDocId, setRenamingDocId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
 
   const folderKey = folderId ?? "root";
   const listing = listingsByFolder[folderKey] ?? null;
@@ -153,6 +155,32 @@ export default function DirectoryBrowser({ user }: DirectoryBrowserProps) {
       invalidateCurrentFolder();
     } catch (err) {
       setError(err instanceof Error ? err.message : t("directory.failedDeleteDocument"));
+    }
+  }
+
+  function handleStartRename(event: React.MouseEvent | React.KeyboardEvent, doc: { id: string; filename: string }) {
+    event.preventDefault();
+    event.stopPropagation();
+    setRenamingDocId(doc.id);
+    setRenameValue(doc.filename);
+  }
+
+  async function handleRenameSubmit(docId: string) {
+    const trimmed = renameValue.trim();
+    setRenamingDocId(null);
+    if (!trimmed) return;
+
+    try {
+      const response = await fetch(`/api/documents/${docId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: trimmed }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || t("directory.failedRenameDocument"));
+      invalidateCurrentFolder();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("directory.failedRenameDocument"));
     }
   }
 
@@ -313,6 +341,16 @@ export default function DirectoryBrowser({ user }: DirectoryBrowserProps) {
                   <span
                     role="button"
                     tabIndex={0}
+                    onClick={(event) => handleStartRename(event, doc)}
+                    onKeyDown={(event) => event.key === "Enter" && handleStartRename(event, doc)}
+                    className="absolute right-9 top-2 z-10 rounded-full bg-white/90 p-1.5 text-slate-300 opacity-0 hover:bg-blue-50 hover:text-blue-600 group-hover:opacity-100"
+                    aria-label={t("directory.renameDocumentAriaLabel", { name: doc.filename })}
+                  >
+                    ✏️
+                  </span>
+                  <span
+                    role="button"
+                    tabIndex={0}
                     onClick={(event) => handleDeleteDocument(event, doc)}
                     onKeyDown={(event) => event.key === "Enter" && handleDeleteDocument(event as unknown as React.MouseEvent, doc)}
                     className="absolute right-2 top-2 z-10 rounded-full bg-white/90 p-1.5 text-slate-300 opacity-0 hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
@@ -334,7 +372,32 @@ export default function DirectoryBrowser({ user }: DirectoryBrowserProps) {
                   ) : (
                     <div className="flex aspect-[3/4] w-full items-center justify-center rounded-lg bg-slate-50 text-3xl">📄</div>
                   )}
-                  <span className="truncate text-sm font-medium text-slate-800">{doc.filename}</span>
+                  {renamingDocId === doc.id ? (
+                    <input
+                      autoFocus
+                      value={renameValue}
+                      onChange={(event) => setRenameValue(event.target.value)}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                      }}
+                      onKeyDown={(event) => {
+                        event.stopPropagation();
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          handleRenameSubmit(doc.id);
+                        }
+                        if (event.key === "Escape") {
+                          event.preventDefault();
+                          setRenamingDocId(null);
+                        }
+                      }}
+                      onBlur={() => handleRenameSubmit(doc.id)}
+                      className="w-full truncate rounded-lg border border-blue-300 px-1.5 py-0.5 text-sm font-medium text-slate-800 outline-none"
+                    />
+                  ) : (
+                    <span className="truncate text-sm font-medium text-slate-800">{doc.filename}</span>
+                  )}
                   <span className="text-xs text-slate-400">
                     {doc.lastPageNumber
                       ? t("viewer.pageProgress", { current: doc.lastPageNumber, total: doc.pageCount })

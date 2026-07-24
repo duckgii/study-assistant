@@ -122,6 +122,17 @@ Respond with strict JSON only — no prose outside the JSON, no markdown code fe
 {"questions": [{"type": "multiple-choice", "question": "...", "options": ["...", "..."], "correctAnswer": "...", "explanation": "...", "difficulty": "easy"}]}
 
 "type" must be one of "multiple-choice", "true-false", or "short-answer". Include "options" only for "multiple-choice" (2-4 real, plausible options). For "true-false", correctAnswer must be exactly "True" or "False".`,
+  sectionTitleTranslation: `You are localizing UI section titles for a study app.
+
+Translate each of the following section titles into {{languageName}}. If a title is already in {{languageName}}, return it unchanged — do not add commentary or explanation. Keep translations short and natural, in the style of a section/chapter heading, not a literal word-for-word translation if that would read awkwardly.
+
+Titles (id: title), one per line:
+{{titleList}}
+
+Respond with strict JSON only — no prose outside the JSON, no markdown code fences — in exactly this shape:
+{"titles": [{"id": "...", "title": "translated title"}]}
+
+Include exactly one entry per id listed above, in the same order, using the exact same id values.`,
   chatAssistant: `You are a study assistant answering questions about the section "{{title}}".
 
 Here is the section's source material — use this whenever possible:
