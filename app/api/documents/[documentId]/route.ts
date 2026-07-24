@@ -59,14 +59,21 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     return NextResponse.json({ error: "Document not found." }, { status: 404 });
   }
 
-  const { lastPageNumber, reviewScore } = await request.json();
-  const data: { lastPageNumber?: number; completedAt?: Date; lastReviewScore?: number } = {};
+  const { lastPageNumber, reviewScore, filename } = await request.json();
+  const data: { lastPageNumber?: number; completedAt?: Date; lastReviewScore?: number; filename?: string } = {};
 
   if (lastPageNumber !== undefined) {
     if (typeof lastPageNumber !== "number") {
       return NextResponse.json({ error: "lastPageNumber must be a number." }, { status: 400 });
     }
     data.lastPageNumber = lastPageNumber;
+  }
+
+  if (filename !== undefined) {
+    if (typeof filename !== "string" || !filename.trim()) {
+      return NextResponse.json({ error: "filename must be a non-empty string." }, { status: 400 });
+    }
+    data.filename = filename.trim().slice(0, 255);
   }
 
   // Submitting the final review quiz marks the document as fully studied.

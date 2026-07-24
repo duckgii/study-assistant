@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generatePreLearning, generateExplanation, generatePageNote, generateQuiz, generateMoreQuiz, generateReviewQuiz, generateMoreReviewQuiz, type Language } from "@/lib/ai";
+import { generatePreLearning, generateExplanation, generatePageNote, generateQuiz, generateMoreQuiz, generateReviewQuiz, generateMoreReviewQuiz, translateSectionTitles, type Language } from "@/lib/ai";
 
 export async function POST(request: NextRequest) {
   const { mode, sectionTitle, sectionContent, sections, pages, page, existingQuestions, language } = await request.json();
@@ -37,6 +37,11 @@ export async function POST(request: NextRequest) {
 
   if (mode === "more-review") {
     const data = await generateMoreReviewQuiz(sectionTitle, sectionContent, existingQuestions || [], lang);
+    return NextResponse.json({ data });
+  }
+
+  if (mode === "translate-titles") {
+    const data = await translateSectionTitles(sections || [], lang);
     return NextResponse.json({ data });
   }
 

@@ -33,6 +33,9 @@ export async function POST(request: NextRequest) {
     if (!isPdf && !isPptx) {
       return NextResponse.json({ error: "Only PDF and PPTX files are supported." }, { status: 400 });
     }
+    // Stored/displayed name drops the extension — the file type is tracked
+    // separately (savePdfFile always writes a .pdf), not shown to the user.
+    const displayName = filename.replace(/\.(pdf|pptx)$/i, "");
 
     const bytes = await (file as File).arrayBuffer();
     const originalBuffer = Buffer.from(bytes);
@@ -95,7 +98,7 @@ export async function POST(request: NextRequest) {
         id: documentId,
         userId: session.user.id,
         folderId: typeof folderId === "string" && folderId ? folderId : null,
-        filename,
+        filename: displayName,
         filePath,
         contentHash,
         thumbnailDataUrl: thumbnailsByPage.get(1) || null,
@@ -125,7 +128,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       documentId,
-      filename,
+      filename: displayName,
       pages,
       sections,
     });

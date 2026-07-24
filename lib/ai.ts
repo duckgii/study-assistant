@@ -462,6 +462,37 @@ export async function segmentIntoConcepts(pages: ConceptPage[]): Promise<Concept
   }
 }
 
+export interface SectionTitleInput {
+  id: string;
+  title: string;
+}
+
+// Section titles are decided once, at upload time, independent of whatever
+// display language the student later picks — this translates them for
+// display without touching the stored originals, so callers should cache the
+// result client-side per (document, language) rather than call this per render.
+export async function translateSectionTitles(sections: SectionTitleInput[], language: Language): Promise<Record<string, string> | null> {
+  if (!gemini || sections.length === 0) return null;
+
+  try {
+    const titleList = sections.map((section) => `${section.id}: ${section.title}`).join("\n");
+    const prompt = buildPrompt("sectionTitleTranslation", { languageName: LANGUAGE_NAMES[language], titleList });
+    const text = await askGemini(prompt, Math.min(2048, 200 + sections.length * 40));
+    const parsed = parseJsonLoose(text) as { titles?: unknown } | null;
+    if (!parsed || !Array.isArray(parsed.titles)) return null;
+
+    const map: Record<string, string> = {};
+    for (const entry of parsed.titles as Array<{ id?: unknown; title?: unknown }>) {
+      if (typeof entry.id === "string" && typeof entry.title === "string" && entry.title.trim()) {
+        map[entry.id] = entry.title.trim();
+      }
+    }
+    return Object.keys(map).length > 0 ? map : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function generateReviewQuiz(rangeTitle: string, rangeContent: string, language: Language = "en"): Promise<QuizItem[]> {
   if (!gemini) return createReviewQuiz(rangeTitle, rangeContent);
 
