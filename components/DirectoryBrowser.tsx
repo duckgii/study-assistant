@@ -257,6 +257,19 @@ export default function DirectoryBrowser({ user }: DirectoryBrowserProps) {
           )}
         </div>
 
+        {isUploading && (
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
+            {uploadProgress && uploadProgress.total > 1 ? (
+              <div
+                className="h-full rounded-full bg-blue-600 transition-all duration-300"
+                style={{ width: `${Math.round(((uploadProgress.done + 1) / uploadProgress.total) * 100)}%` }}
+              />
+            ) : (
+              <div className="h-full w-1/3 rounded-full bg-blue-600 animate-upload-bar" />
+            )}
+          </div>
+        )}
+
         {error && <div className="whitespace-pre-line rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
         {notice && <div className="rounded-2xl bg-green-50 px-4 py-3 text-sm text-green-700">{notice}</div>}
 
