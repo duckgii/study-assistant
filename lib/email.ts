@@ -37,11 +37,17 @@ async function sendWithFormSubmit(params: {
   message: string;
   subject: string;
 }): Promise<{ ok: boolean; error?: string }> {
+  // FormSubmit's AJAX endpoint rejects server-to-server requests with no
+  // Referer (it expects to be called from a browser page) — a Node fetch
+  // sends none by default, so this must be set explicitly or every request
+  // silently fails despite responding with HTTP 200.
+  const referer = process.env.AUTH_URL || "http://localhost:3000";
   const response = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(params.to)}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
+      Referer: referer,
     },
     body: JSON.stringify({
       name: params.name,
@@ -53,11 +59,23 @@ async function sendWithFormSubmit(params: {
     }),
   });
 
+  const body = await response.text();
   if (!response.ok) {
-    const body = await response.text();
     return { ok: false, error: body || "FormSubmit request failed." };
   }
-  return { ok: true };
+
+  // FormSubmit reports logical failures (unactivated destination, rejected
+  // request, etc.) as JSON with success:"false" while still returning HTTP
+  // 200 — response.ok alone can't tell success from failure here.
+  try {
+    const parsed = JSON.parse(body) as { success?: string | boolean; message?: string };
+    if (parsed.success !== true && parsed.success !== "true") {
+      return { ok: false, error: parsed.message || "FormSubmit rejected the request." };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, error: body || "FormSubmit returned an unexpected response." };
+  }
 }
 
 // Tries Resend first when configured (falls back to FormSubmit once on failure),
