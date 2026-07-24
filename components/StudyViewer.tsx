@@ -78,7 +78,7 @@ export default function StudyViewer({
     <div className="flex h-full flex-col gap-6">
       <ProgressBar current={pageIndexInRange} total={totalPagesInRange} label={t("viewer.pageProgress", { current: pageIndexInRange, total: totalPagesInRange })} />
 
-      <div className="relative flex flex-1 flex-col items-center justify-center rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="relative flex h-[70vh] flex-col items-center justify-center rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <button
           onClick={onPrev}
           disabled={!canGoPrev}
@@ -97,16 +97,16 @@ export default function StudyViewer({
         </button>
 
         {isImageLoading && !imageDataUrl ? (
-          <div className="flex aspect-[4/3] w-full max-w-3xl items-center justify-center rounded-2xl bg-slate-50 text-sm text-slate-400">{t("viewer.renderingPage")}</div>
+          <div className="flex aspect-[4/3] max-h-full w-full max-w-3xl items-center justify-center rounded-2xl bg-slate-50 text-sm text-slate-400">{t("viewer.renderingPage")}</div>
         ) : imageDataUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={imageDataUrl}
             alt={t("common.pageNumber", { num: page.pageNumber })}
-            className="max-h-[70vh] w-full max-w-3xl rounded-2xl border border-slate-100 object-contain shadow-sm"
+            className="max-h-full w-full max-w-3xl rounded-2xl border border-slate-100 object-contain shadow-sm"
           />
         ) : (
-          <div className="flex aspect-[4/3] w-full max-w-3xl items-center justify-center rounded-2xl bg-slate-50 text-sm text-slate-400">
+          <div className="flex aspect-[4/3] max-h-full w-full max-w-3xl items-center justify-center rounded-2xl bg-slate-50 text-sm text-slate-400">
             {t("viewer.cannotRender")}
           </div>
         )}
