@@ -21,6 +21,10 @@ export default function StudyRangeSelector({ filename, pages, sections, onConfir
   const { t } = useLanguage();
   const [selected, setSelected] = useState<string[]>(sections.length > 0 ? [sections[0].id] : []);
   const dragRef = useRef<DragState | null>(null);
+  // Tracks the last row clicked WITHOUT shift, as the anchor for shift-click
+  // range selection — stays put across repeated shift-clicks (like a file
+  // explorer), only moving when a plain click sets a new anchor.
+  const lastClickedIndexRef = useRef<number | null>(null);
 
   // End a drag no matter where the pointer is released, including outside the list.
   useEffect(() => {
@@ -49,7 +53,15 @@ export default function StudyRangeSelector({ filename, pages, sections, onConfir
     setSelected(Array.from(next));
   }
 
-  function handleRowMouseDown(index: number) {
+  function handleRowMouseDown(index: number, shiftKey: boolean) {
+    if (shiftKey && lastClickedIndexRef.current !== null) {
+      const from = Math.min(lastClickedIndexRef.current, index);
+      const to = Math.max(lastClickedIndexRef.current, index);
+      setSelected(sections.slice(from, to + 1).map((section) => section.id));
+      return;
+    }
+
+    lastClickedIndexRef.current = index;
     const preDragSelected = new Set(selected);
     const mode: DragState["mode"] = preDragSelected.has(sections[index].id) ? "deselect" : "select";
     dragRef.current = { anchorIndex: index, mode, preDragSelected };
@@ -97,7 +109,7 @@ export default function StudyRangeSelector({ filename, pages, sections, onConfir
               key={section.id}
               onMouseDown={(event) => {
                 event.preventDefault();
-                handleRowMouseDown(index);
+                handleRowMouseDown(index, event.shiftKey);
               }}
               onMouseEnter={() => handleRowMouseEnter(index)}
               className={`flex cursor-pointer items-center justify-between rounded-2xl border px-4 py-3 text-sm transition ${selected.includes(section.id) ? "border-blue-500 bg-blue-50" : "border-slate-200 bg-white"}`}
