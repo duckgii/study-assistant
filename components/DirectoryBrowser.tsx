@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppHeader from "./AppHeader";
 import { useLanguage, type TranslationKey } from "@/lib/i18n";
-import type { DirectoryListing } from "@/lib/types";
+import { MAX_UPLOAD_FILE_SIZE_BYTES, type DirectoryListing } from "@/lib/types";
 
 interface DirectoryBrowserProps {
   user: { name?: string | null; image?: string | null };
@@ -113,6 +113,10 @@ export default function DirectoryBrowser({ user }: DirectoryBrowserProps) {
   }
 
   async function uploadOne(file: File): Promise<{ status: "ok" | "duplicate" | "error"; documentId?: string; message: string }> {
+    if (file.size > MAX_UPLOAD_FILE_SIZE_BYTES) {
+      return { status: "error", message: `${file.name}: ${t("directory.fileTooLarge", { size: String(MAX_UPLOAD_FILE_SIZE_BYTES / (1024 * 1024)) })}` };
+    }
+
     const formData = new FormData();
     formData.append("file", file);
     if (folderId) formData.append("folderId", folderId);
