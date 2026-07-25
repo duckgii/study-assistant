@@ -5,6 +5,12 @@ export type PreLearningData = PreLearningOutput;
 export type ExplanationData = ExplanationOutput;
 export type { QuizItem, SectionMeta };
 
+// Shared between the upload API route and the client uploader so both reject
+// oversized files the same way — the whole file gets buffered in memory and,
+// for .pptx, converted via LibreOffice, so this also protects the (memory-
+// constrained) server process from OOMing on a huge upload.
+export const MAX_UPLOAD_FILE_SIZE_BYTES = 25 * 1024 * 1024;
+
 export interface PageMeta {
   pageNumber: number;
   text: string;

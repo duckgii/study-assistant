@@ -7,6 +7,7 @@ import { segmentIntoConcepts } from "@/lib/ai";
 import { savePdfFile } from "@/lib/pdfStorage";
 import { convertPptxToPdf } from "@/lib/pptxConvert";
 import { prisma } from "@/lib/db";
+import { MAX_UPLOAD_FILE_SIZE_BYTES } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -32,6 +33,12 @@ export async function POST(request: NextRequest) {
     const isPdf = lowerFilename.endsWith(".pdf");
     if (!isPdf && !isPptx) {
       return NextResponse.json({ error: "Only PDF and PPTX files are supported." }, { status: 400 });
+    }
+    if ((file as File).size > MAX_UPLOAD_FILE_SIZE_BYTES) {
+      return NextResponse.json(
+        { error: `File is too large. Maximum size is ${MAX_UPLOAD_FILE_SIZE_BYTES / (1024 * 1024)}MB.` },
+        { status: 413 }
+      );
     }
     // Stored/displayed name drops the extension — the file type is tracked
     // separately (savePdfFile always writes a .pdf), not shown to the user.
