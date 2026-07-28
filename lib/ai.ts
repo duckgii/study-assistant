@@ -1,10 +1,14 @@
 import { GoogleGenAI } from "@google/genai";
 import { buildPrompt } from "@/lib/prompts";
 import { createConceptQuiz, createReviewQuiz } from "@/lib/quizGenerator";
-import { assessSectionRelevance, hasVisualContent, SPARSE_TEXT_THRESHOLD } from "@/lib/contentGate";
+import { assessSectionRelevance, hasVisualContent, isUnreliableText } from "@/lib/contentGate";
 
 const GEMINI_MODEL = "gemini-flash-lite-latest";
 const MAX_IMAGES_PER_CALL = 4;
+// Concept segmentation is one call covering the whole document rather than a
+// single section, so a document that's mostly handwritten/scanned pages
+// needs a much higher image budget than the per-section calls do.
+const MAX_SEGMENTATION_IMAGES = 24;
 
 export type Language = "en" | "ko";
 
@@ -41,15 +45,16 @@ function parseDataUrl(dataUrl: string): ImagePart | null {
   return match ? { mimeType: match[1], data: match[2] } : null;
 }
 
-// Pages with little to no extractable text are likely diagrams, photos, or
-// scanned content that pdf-parse can't read — attach the page image itself
-// (already generated as a thumbnail at upload time) so Gemini's vision can
-// actually look at it, capped so one section doesn't balloon the request.
-function collectVisualParts(pages: SectionPage[]): ImagePart[] {
+// Pages with little to no reliable extractable text are likely diagrams,
+// photos, handwritten notes, or scanned content that pdf-parse can't read
+// (or misreads as garbled noise) — attach the page image itself (already
+// generated as a thumbnail at upload time) so Gemini's vision can actually
+// look at it, capped so one call doesn't balloon in size.
+function collectVisualParts(pages: SectionPage[], limit: number = MAX_IMAGES_PER_CALL): ImagePart[] {
   const images: ImagePart[] = [];
   for (const page of pages) {
-    if (images.length >= MAX_IMAGES_PER_CALL) break;
-    if (page.text.trim().length >= SPARSE_TEXT_THRESHOLD || !page.thumbnailDataUrl) continue;
+    if (images.length >= limit) break;
+    if (!isUnreliableText(page.text) || !page.thumbnailDataUrl) continue;
     const parsed = parseDataUrl(page.thumbnailDataUrl);
     if (parsed) images.push(parsed);
   }
@@ -110,11 +115,20 @@ function isDuplicateFact(candidate: { question: string; correctAnswer: string },
 
 // gemini-flash-lite-latest has no thinking mode, so there's no thinkingConfig
 // to pass (and passing one 400s) — unlike the full flash-latest model used
-// previously.
-async function askGemini(prompt: string, maxOutputTokens: number, images: ImagePart[] = []): Promise<string> {
+// previously. An optional `label` on an image is sent as its own text part
+// immediately before it, so the model can tell which page a given image is
+// from when several are attached at once (plain, unlabeled image lists only
+// work when every image is already known to belong to the same section).
+async function askGemini(prompt: string, maxOutputTokens: number, images: Array<ImagePart & { label?: string }> = []): Promise<string> {
   const contents =
     images.length > 0
-      ? [{ text: prompt }, ...images.map((image) => ({ inlineData: { mimeType: image.mimeType, data: image.data } }))]
+      ? [
+          { text: prompt },
+          ...images.flatMap((image) => [
+            ...(image.label ? [{ text: image.label }] : []),
+            { inlineData: { mimeType: image.mimeType, data: image.data } },
+          ]),
+        ]
       : prompt;
   const response = await gemini!.models.generateContent({
     model: GEMINI_MODEL,
@@ -307,7 +321,7 @@ const MIN_PAGE_NOTE_CHARS = 20;
 // page. Skips near-empty, imageless pages locally without an AI call.
 export async function generatePageNote(sectionTitle: string, page: SectionPage, language: Language = "en"): Promise<string | null> {
   const text = page.text.trim();
-  const pageHasVisual = text.length < SPARSE_TEXT_THRESHOLD && !!page.thumbnailDataUrl;
+  const pageHasVisual = isUnreliableText(text) && !!page.thumbnailDataUrl;
   if (!pageHasVisual && text.length < MIN_PAGE_NOTE_CHARS) return null;
   if (!gemini) return null;
 
@@ -413,6 +427,7 @@ export async function generateMoreQuiz(sectionTitle: string, pages: SectionPage[
 export interface ConceptPage {
   num: number;
   text: string;
+  thumbnailDataUrl?: string | null;
 }
 
 export interface ConceptSection {
@@ -431,7 +446,19 @@ export async function segmentIntoConcepts(pages: ConceptPage[]): Promise<Concept
   try {
     const pageList = pages.map((page) => `--- Page ${page.num} ---\n${page.text.slice(0, 1500)}`).join("\n\n");
     const prompt = buildPrompt("conceptSegmentation", { pageList });
-    const text = await askGemini(prompt, Math.min(8192, 1024 + pages.length * 40));
+
+    // Pages whose extracted text is unreliable (handwritten notes, scans,
+    // misdecoded fonts) get their thumbnail attached instead, labeled with
+    // its page number so the model can place it correctly in the sequence.
+    const images: Array<ImagePart & { label: string }> = [];
+    for (const page of pages) {
+      if (images.length >= MAX_SEGMENTATION_IMAGES) break;
+      if (!isUnreliableText(page.text) || !page.thumbnailDataUrl) continue;
+      const parsed = parseDataUrl(page.thumbnailDataUrl);
+      if (parsed) images.push({ ...parsed, label: `Page ${page.num} image:` });
+    }
+
+    const text = await askGemini(prompt, Math.min(8192, 1024 + pages.length * 40), images);
 
     const parsed = parseJsonLoose(text) as { sections?: unknown } | null;
     if (!parsed || !Array.isArray(parsed.sections)) return null;

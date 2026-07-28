@@ -92,7 +92,8 @@ export async function POST(request: NextRequest) {
     const thumbnailsByPage = new Map(screenshotResult.pages.map((shot) => [shot.pageNumber, shot.dataUrl]));
 
     const pageInputs = textResult.pages.map((page) => ({ num: page.num, text: page.text }));
-    const aiSections = await segmentIntoConcepts(pageInputs);
+    const segmentationPages = pageInputs.map((page) => ({ ...page, thumbnailDataUrl: thumbnailsByPage.get(page.num) || null }));
+    const aiSections = await segmentIntoConcepts(segmentationPages);
     const { sections, pageSectionMap } = aiSections
       ? buildSplitResult(aiSections.map((section, index) => ({ id: `section-${index + 1}`, title: section.title, pageNumbers: section.pageNumbers })))
       : splitPagesIntoSections(pageInputs);
