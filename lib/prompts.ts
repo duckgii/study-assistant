@@ -5,6 +5,8 @@ Here is the complete document, page by page:
 
 {{pageList}}
 
+Some pages above may show little or garbled text (e.g. "→ ( ) …" with few real words) instead of readable content — that means the page's real content (handwritten notes, a diagram, a scan) couldn't be extracted as text. For any such page, an image of that page is attached below, each preceded by a label like "Page 7 image:" telling you which page number it's from. Base that page's topic on the image, not the garbled text shown for it in the list above.
+
 Read through the whole document and identify where one distinct concept ends and the next begins. A boundary should reflect a genuine shift in topic or idea — not just where a slide or page happens to end. Group consecutive pages that belong to the same concept together. Do not aim for a fixed number of pages per section; some concepts may span one page, others many.
 
 Respond with strict JSON only — no prose outside the JSON, no markdown code fences — in exactly this shape:
