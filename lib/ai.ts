@@ -119,7 +119,13 @@ function isDuplicateFact(candidate: { question: string; correctAnswer: string },
 // immediately before it, so the model can tell which page a given image is
 // from when several are attached at once (plain, unlabeled image lists only
 // work when every image is already known to belong to the same section).
-async function askGemini(prompt: string, maxOutputTokens: number, images: Array<ImagePart & { label?: string }> = []): Promise<string> {
+// `language`, when given, is set as a system instruction rather than relying
+// solely on the trailing reminder `withLanguage` appends to the prompt text —
+// system instructions get more consistent weight from the model, and a
+// prompt-only reminder has been observed to get dropped occasionally
+// (most noticeably on image-grounded calls, where the model leans on the
+// image content and can drift back to English despite the request).
+async function askGemini(prompt: string, maxOutputTokens: number, images: Array<ImagePart & { label?: string }> = [], language?: Language): Promise<string> {
   const contents =
     images.length > 0
       ? [
@@ -133,7 +139,14 @@ async function askGemini(prompt: string, maxOutputTokens: number, images: Array<
   const response = await gemini!.models.generateContent({
     model: GEMINI_MODEL,
     contents,
-    config: { maxOutputTokens },
+    config: {
+      maxOutputTokens,
+      ...(language
+        ? {
+            systemInstruction: `Respond only in ${LANGUAGE_NAMES[language]} — every piece of text you generate, including string values inside JSON. Exception: if instructed to output an exact control keyword (e.g. SKIP, NONE, True, False), keep that keyword unchanged in English.`,
+          }
+        : {}),
+    },
   });
   return response.text || "";
 }
@@ -269,7 +282,7 @@ export async function generatePreLearning(rangeTitle: string, sections: RangeSec
   try {
     const sectionListText = sections.map((section, index) => `${index + 1}. ${section.title}\n${section.content.slice(0, 800)}`).join("\n\n");
     const prompt = withLanguage(buildPrompt("preLearning", { title: rangeTitle, sectionList: sectionListText }), language);
-    const text = (await askGemini(prompt, 512)).trim();
+    const text = (await askGemini(prompt, 512, [], language)).trim();
     return text ? { summary: text } : createFallbackPreLearning(rangeTitle, sections);
   } catch {
     return createFallbackPreLearning(rangeTitle, sections);
@@ -296,7 +309,7 @@ export async function generateExplanation(sectionTitle: string, pages: SectionPa
       }),
       language
     );
-    const text = await askGemini(prompt, 400, images);
+    const text = await askGemini(prompt, 400, images, language);
     // The model explicitly recognized this as navigational content (table of
     // contents, agenda, cover page) with nothing to explain — respect that
     // and skip, rather than falling back to the local generator, which has
@@ -334,7 +347,7 @@ export async function generatePageNote(sectionTitle: string, page: SectionPage, 
       }),
       language
     );
-    const responseText = (await askGemini(prompt, 200, images)).trim();
+    const responseText = (await askGemini(prompt, 200, images, language)).trim();
     if (!responseText || responseText.toUpperCase() === "NONE") return null;
     return responseText;
   } catch {
@@ -358,7 +371,7 @@ export async function generateQuiz(sectionTitle: string, pages: SectionPage[], l
       }),
       language
     );
-    const text = await askGemini(prompt, 1536, images);
+    const text = await askGemini(prompt, 1536, images, language);
     const parsed = parseJsonLoose(text) as { questions?: unknown } | null;
     // The model explicitly recognized this as navigational content (table of
     // contents, agenda, cover page) with nothing worth quizzing — respect
@@ -405,7 +418,7 @@ export async function generateMoreQuiz(sectionTitle: string, pages: SectionPage[
       }),
       language
     );
-    const text = await askGemini(prompt, 2200, images);
+    const text = await askGemini(prompt, 2200, images, language);
     const normalized = normalizeQuizItems(parseJsonLoose(text), idPrefix);
     if (!normalized) return [];
 
@@ -504,7 +517,7 @@ export async function translateSectionTitles(sections: SectionTitleInput[], lang
   try {
     const titleList = sections.map((section) => `${section.id}: ${section.title}`).join("\n");
     const prompt = buildPrompt("sectionTitleTranslation", { languageName: LANGUAGE_NAMES[language], titleList });
-    const text = await askGemini(prompt, Math.min(2048, 200 + sections.length * 40));
+    const text = await askGemini(prompt, Math.min(2048, 200 + sections.length * 40), [], language);
     const parsed = parseJsonLoose(text) as { titles?: unknown } | null;
     if (!parsed || !Array.isArray(parsed.titles)) return null;
 
@@ -525,7 +538,7 @@ export async function generateReviewQuiz(rangeTitle: string, rangeContent: strin
 
   try {
     const prompt = withLanguage(buildPrompt("finalReview", { title: rangeTitle, content: rangeContent.slice(0, 6000) }), language);
-    const text = await askGemini(prompt, 4096);
+    const text = await askGemini(prompt, 4096, [], language);
     const normalized = normalizeQuizItems(parseJsonLoose(text), "review");
     return normalized && normalized.length >= 6 ? normalized.slice(0, 10) : createReviewQuiz(rangeTitle, rangeContent);
   } catch {
@@ -560,7 +573,7 @@ export async function generateMoreReviewQuiz(rangeTitle: string, rangeContent: s
       }),
       language
     );
-    const text = await askGemini(prompt, 3000);
+    const text = await askGemini(prompt, 3000, [], language);
     const normalized = normalizeQuizItems(parseJsonLoose(text), idPrefix);
     if (!normalized) return [];
 
@@ -592,7 +605,7 @@ export async function generateChatAnswer(question: string, sectionTitle: string,
       }),
       language
     );
-    const text = await askGemini(`${prompt}\n\nQuestion: ${question}`, 1024, images);
+    const text = await askGemini(`${prompt}\n\nQuestion: ${question}`, 1024, images, language);
     return text || "I can help you unpack that concept.";
   } catch {
     return `I’m using the section context to answer your question. The main idea is to connect the core concept to a simple example so it is easier to remember.`;
