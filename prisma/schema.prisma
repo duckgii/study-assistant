@@ -19,6 +19,7 @@ model User {
   sessions  Session[]
   folders   Folder[]
   documents Document[]
+  feedbacks Feedback[]
 }
 
 model Account {
@@ -91,16 +92,17 @@ model Document {
   completedAt      DateTime?
   lastReviewScore  Int?
 
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  folder   Folder?   @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  pages    Page[]
-  sections Section[]
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folder    Folder?    @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  pages     Page[]
+  sections  Section[]
+  feedbacks Feedback[]
 
   @@unique([userId, contentHash])
 }
 
 model Page {
-  id               String @id @default(cuid())
+  id               String  @id @default(cuid())
   documentId       String
   pageNumber       Int
   text             String
@@ -120,4 +122,20 @@ model Section {
   pageNumbers String
 
   document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model Feedback {
+  id            String   @id @default(cuid())
+  userId        String
+  documentId    String?
+  // Snapshotted at submission time so feedback stays readable even if the
+  // source document is later renamed or deleted.
+  documentTitle String
+  sectionTitle  String?
+  pageNumber    Int
+  message       String
+  createdAt     DateTime @default(now())
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  document Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
 }

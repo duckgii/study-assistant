@@ -9,6 +9,7 @@ import StudyViewer from "@/components/StudyViewer";
 import ReviewCard from "@/components/ReviewCard";
 import ChatWidget from "@/components/ChatWidget";
 import AppHeader from "@/components/AppHeader";
+import FeedbackButton from "@/components/FeedbackButton";
 import { assessSectionRelevance, hasVisualContent } from "@/lib/contentGate";
 import { useLanguage, type Language } from "@/lib/i18n";
 import type { DocumentDetail, ExplanationData, PageMeta, PreLearningData, QuizItem } from "@/lib/types";
@@ -622,7 +623,21 @@ export default function StudyFlow({ documentId, user }: StudyFlowProps) {
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-8 text-slate-900">
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
-        <AppHeader title={doc.filename} subtitle={t("studyFlow.activeDocument")} user={user} />
+        <AppHeader
+          title={doc.filename}
+          subtitle={t("studyFlow.activeDocument")}
+          user={user}
+          right={
+            step === "viewer" && currentPage && displayCurrentSection ? (
+              <FeedbackButton
+                documentId={documentId}
+                documentTitle={doc.filename}
+                pageNumber={currentPage.pageNumber}
+                sectionTitle={displayCurrentSection.title}
+              />
+            ) : undefined
+          }
+        />
 
         {step !== "range-select" && (
           <div className="flex items-center gap-1 self-start rounded-full border border-slate-200 bg-white p-1 shadow-sm">
