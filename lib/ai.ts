@@ -24,6 +24,27 @@ function withLanguage(prompt: string, language: Language): string {
 
 const gemini = process.env.GEMINI_API_KEY ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }) : null;
 
+const HANGUL_RANGE = /[가-힣]/g;
+const LATIN_LETTER_RANGE = /[A-Za-z]/g;
+
+// systemInstruction (see askGemini) makes the model respect the requested
+// language far more often, but gemini-flash-lite-latest still occasionally
+// answers a Korean request entirely in English — confirmed live, not just a
+// theoretical edge case. Rather than trying to word the instruction even
+// harder (already tried once, still leaks), verify the actual output and
+// retry once with a corrective instruction when it's wrong. Only checks the
+// ko direction: English is the model's default bias, so an 'en' request
+// drifting into Korean has not been observed and isn't worth guarding.
+function looksLikeWrongLanguage(text: string, language: Language): boolean {
+  if (language !== "ko") return false;
+  const hangul = (text.match(HANGUL_RANGE) || []).length;
+  const latin = (text.match(LATIN_LETTER_RANGE) || []).length;
+  // Short control replies (SKIP/NONE/True/False) and outputs with too little
+  // alphabetic content to judge confidently are left alone.
+  if (hangul + latin < 40) return false;
+  return hangul < latin * 0.15;
+}
+
 export interface SectionPage {
   pageNumber: number;
   text: string;
@@ -113,6 +134,65 @@ function isDuplicateFact(candidate: { question: string; correctAnswer: string },
   });
 }
 
+// Confirmed live (2026-08-04): gemini-flash-lite-latest returns HTTP 503
+// "currently experiencing high demand" fairly often, and previously every
+// such call fell straight through to the local fallback generators below —
+// which are hardcoded English templates with no language parameter at all,
+// so a transient overload made the app look like it had ignored the Korean
+// selection entirely, when the actual AI call never even got a response to
+// check the language of. A short retry with backoff absorbs that instead of
+// surfacing it as a wrong-language (or missing) answer. 429 (rate limit) and
+// 500 get the same treatment; anything else fails fast.
+const TRANSIENT_STATUS_CODES = new Set([429, 500, 503]);
+// 4 attempts with the backoff below waits up to ~3.5s (plus jitter) before
+// falling through to the stronger fallback model — confirmed live that a
+// 503 spike can outlast 3 quick attempts (~1.5s total) but clear within
+// this longer window.
+const GEMINI_RETRY_ATTEMPTS = 4;
+
+// The model this app used before switching to the lite variant for cost —
+// confirmed live it's unaffected when the lite model is having a sustained
+// (multi-minute, not just a brief spike) outage, so it's a proven last
+// resort rather than an untested guess. It has a "thinking" phase that
+// consumes part of maxOutputTokens before the actual answer, so it needs a
+// generous buffer on top of the caller's normal budget or the real content
+// gets truncated to nothing (confirmed live: ~760-1000 thinking tokens for
+// these prompt sizes) — passing thinkingBudget: 0 to disable it outright
+// 400s on this model, so padding the budget is the only option that works.
+const FALLBACK_MODEL = "gemini-flash-latest";
+const FALLBACK_MODEL_TOKEN_BUFFER = 1200;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function generateContentWithRetry(
+  params: Parameters<GoogleGenAI["models"]["generateContent"]>[0]
+): Promise<Awaited<ReturnType<GoogleGenAI["models"]["generateContent"]>>> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < GEMINI_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      return await gemini!.models.generateContent(params);
+    } catch (err) {
+      lastError = err;
+      const status = (err as { status?: number })?.status;
+      if (!TRANSIENT_STATUS_CODES.has(status ?? 0)) throw err;
+      if (attempt < GEMINI_RETRY_ATTEMPTS - 1) await delay(500 * 2 ** attempt + Math.random() * 250);
+    }
+  }
+
+  if (params.model === FALLBACK_MODEL) throw lastError;
+  try {
+    return await gemini!.models.generateContent({
+      ...params,
+      model: FALLBACK_MODEL,
+      config: { ...params.config, maxOutputTokens: (params.config?.maxOutputTokens ?? 0) + FALLBACK_MODEL_TOKEN_BUFFER },
+    });
+  } catch {
+    throw lastError;
+  }
+}
+
 // gemini-flash-lite-latest has no thinking mode, so there's no thinkingConfig
 // to pass (and passing one 400s) — unlike the full flash-latest model used
 // previously. An optional `label` on an image is sent as its own text part
@@ -136,7 +216,8 @@ async function askGemini(prompt: string, maxOutputTokens: number, images: Array<
           ]),
         ]
       : prompt;
-  const response = await gemini!.models.generateContent({
+
+  const response = await generateContentWithRetry({
     model: GEMINI_MODEL,
     contents,
     config: {
@@ -148,7 +229,21 @@ async function askGemini(prompt: string, maxOutputTokens: number, images: Array<
         : {}),
     },
   });
-  return response.text || "";
+  const text = response.text || "";
+  if (!language || !looksLikeWrongLanguage(text, language)) return text;
+
+  // Confirmed wrong language in the actual output — retry once with a
+  // sharper, corrective instruction rather than the generic one above.
+  const retryResponse = await generateContentWithRetry({
+    model: GEMINI_MODEL,
+    contents,
+    config: {
+      maxOutputTokens,
+      systemInstruction: `Your previous response to this exact request was written in English, which was wrong. This time you MUST respond entirely in ${LANGUAGE_NAMES[language]} — every piece of text, including string values inside JSON. Do not use English anywhere except an exact control keyword if one was requested (e.g. SKIP, NONE, True, False).`,
+    },
+  });
+  const retryText = retryResponse.text || "";
+  return retryText.trim() ? retryText : text;
 }
 
 export interface PreLearningOutput {
@@ -284,7 +379,8 @@ export async function generatePreLearning(rangeTitle: string, sections: RangeSec
     const prompt = withLanguage(buildPrompt("preLearning", { title: rangeTitle, sectionList: sectionListText }), language);
     const text = (await askGemini(prompt, 512, [], language)).trim();
     return text ? { summary: text } : createFallbackPreLearning(rangeTitle, sections);
-  } catch {
+  } catch (err) {
+    console.error("generatePreLearning: Gemini call failed, using local fallback:", err);
     return createFallbackPreLearning(rangeTitle, sections);
   }
 }
@@ -319,7 +415,8 @@ export async function generateExplanation(sectionTitle: string, pages: SectionPa
       strategy: inferStrategy(sectionTitle, sectionContent),
       explanation: text || "Explanation unavailable",
     };
-  } catch {
+  } catch (err) {
+    console.error("generateExplanation: Gemini call failed, using local fallback:", err);
     return createFallbackExplanation(sectionTitle, sectionContent);
   }
 }
@@ -350,7 +447,8 @@ export async function generatePageNote(sectionTitle: string, page: SectionPage, 
     const responseText = (await askGemini(prompt, 200, images, language)).trim();
     if (!responseText || responseText.toUpperCase() === "NONE") return null;
     return responseText;
-  } catch {
+  } catch (err) {
+    console.error("generatePageNote: Gemini call failed:", err);
     return null;
   }
 }
@@ -380,7 +478,8 @@ export async function generateQuiz(sectionTitle: string, pages: SectionPage[], l
     if (parsed && Array.isArray(parsed.questions) && parsed.questions.length === 0) return null;
     const normalized = normalizeQuizItems(parsed, "quiz");
     return normalized ? normalized.slice(0, 3) : createConceptQuiz(sectionTitle, sectionContent);
-  } catch {
+  } catch (err) {
+    console.error("generateQuiz: Gemini call failed, using local fallback:", err);
     return createConceptQuiz(sectionTitle, sectionContent);
   }
 }
@@ -432,7 +531,8 @@ export async function generateMoreQuiz(sectionTitle: string, pages: SectionPage[
       accepted.push(candidate);
     }
     return accepted;
-  } catch {
+  } catch (err) {
+    console.error("generateMoreQuiz: Gemini call failed:", err);
     return [];
   }
 }
@@ -497,7 +597,8 @@ export async function segmentIntoConcepts(pages: ConceptPage[]): Promise<Concept
     }
 
     return sections.length > 0 && seenPages.size === pages.length ? sections : null;
-  } catch {
+  } catch (err) {
+    console.error("segmentIntoConcepts: Gemini call failed:", err);
     return null;
   }
 }
@@ -528,7 +629,8 @@ export async function translateSectionTitles(sections: SectionTitleInput[], lang
       }
     }
     return Object.keys(map).length > 0 ? map : null;
-  } catch {
+  } catch (err) {
+    console.error("translateSectionTitles: Gemini call failed:", err);
     return null;
   }
 }
@@ -541,7 +643,8 @@ export async function generateReviewQuiz(rangeTitle: string, rangeContent: strin
     const text = await askGemini(prompt, 4096, [], language);
     const normalized = normalizeQuizItems(parseJsonLoose(text), "review");
     return normalized && normalized.length >= 6 ? normalized.slice(0, 10) : createReviewQuiz(rangeTitle, rangeContent);
-  } catch {
+  } catch (err) {
+    console.error("generateReviewQuiz: Gemini call failed, using local fallback:", err);
     return createReviewQuiz(rangeTitle, rangeContent);
   }
 }
@@ -584,7 +687,8 @@ export async function generateMoreReviewQuiz(rangeTitle: string, rangeContent: s
       accepted.push(candidate);
     }
     return accepted;
-  } catch {
+  } catch (err) {
+    console.error("generateMoreReviewQuiz: Gemini call failed:", err);
     return [];
   }
 }
@@ -607,7 +711,8 @@ export async function generateChatAnswer(question: string, sectionTitle: string,
     );
     const text = await askGemini(`${prompt}\n\nQuestion: ${question}`, 1024, images, language);
     return text || "I can help you unpack that concept.";
-  } catch {
+  } catch (err) {
+    console.error("generateChatAnswer: Gemini call failed, using local fallback:", err);
     return `I’m using the section context to answer your question. The main idea is to connect the core concept to a simple example so it is easier to remember.`;
   }
 }
