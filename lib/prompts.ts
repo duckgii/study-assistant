@@ -151,7 +151,10 @@ Respond clearly, briefly, and in a tutor-like tone.`,
 export function buildPrompt(template: keyof typeof promptTemplates, context: Record<string, string>) {
   let prompt = promptTemplates[template];
   Object.entries(context).forEach(([key, value]) => {
-    prompt = prompt.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), value);
+    // A function replacer (not a string) — source material routinely contains
+    // "$1", "$&", "$$" etc. (math, regex examples, prices), which `replace`
+    // would otherwise interpret as special replacement patterns and corrupt.
+    prompt = prompt.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), () => value);
   });
   return prompt;
 }

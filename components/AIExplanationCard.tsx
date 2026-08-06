@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useLanguage } from "@/lib/i18n";
 import type { ExplanationData } from "@/lib/types";
 
@@ -40,7 +41,7 @@ export default function AIExplanationCard({ sectionTitle, explanation, isLoading
           ) : explanation ? (
             <>
               <div className="prose prose-sm prose-slate max-w-none leading-7 prose-strong:text-slate-900">
-                <ReactMarkdown>{explanation.explanation}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{explanation.explanation}</ReactMarkdown>
               </div>
               <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">
                 {t("aiTutor.strategy", { strategy: explanation.strategy })}
@@ -52,7 +53,7 @@ export default function AIExplanationCard({ sectionTitle, explanation, isLoading
             <div className={explanation || isLoading ? "mt-4 border-t border-slate-100 pt-4" : ""}>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-600">{t("aiTutor.onPage", { page: pageNumber })}</p>
               <div className="prose prose-sm prose-slate mt-2 max-w-none leading-6 prose-strong:text-slate-900">
-                <ReactMarkdown>{pageNote}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{pageNote}</ReactMarkdown>
               </div>
             </div>
           )}

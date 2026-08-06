@@ -1,6 +1,7 @@
 "use client";
 
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useLanguage } from "@/lib/i18n";
 import type { PreLearningData } from "@/lib/types";
 
@@ -23,7 +24,7 @@ export default function PreLearningCard({ data, isLoading, onBegin }: PreLearnin
           <p className="mt-4 text-sm text-slate-500">{t("preLearning.summarizing")}</p>
         ) : (
           <div className="prose prose-sm prose-slate mt-4 max-w-none leading-7 prose-strong:text-slate-900">
-            <ReactMarkdown>{data?.summary || ""}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{data?.summary || ""}</ReactMarkdown>
           </div>
         )}
       </div>

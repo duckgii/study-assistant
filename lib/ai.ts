@@ -12,6 +12,14 @@ const MAX_SEGMENTATION_IMAGES = 24;
 
 export type Language = "en" | "ko";
 
+// Escapes characters markdown treats as syntax so raw PDF-extracted text
+// (which commonly contains *, _, `, [ from bullets, math, code, or footnotes)
+// can be safely dropped into a hand-built markdown template without
+// corrupting the surrounding **bold**/> blockquote syntax.
+function escapeMarkdown(text: string): string {
+  return text.replace(/([\\`*_[\]#])/g, "\\$1");
+}
+
 const LANGUAGE_NAMES: Record<Language, string> = { en: "English", ko: "Korean (한국어)" };
 
 // Appended to every prompt right before it's sent, rather than baked into
@@ -278,7 +286,11 @@ function createFallbackPreLearning(rangeTitle: string, sections: RangeSection[])
 
   const bullets = sections
     .filter((section) => assessSectionRelevance(section.title, section.content).needsExplanation)
-    .map((section) => `- **${section.title}** — ${section.content.replace(/\s+/g, " ").trim().slice(0, 110)}${section.content.length > 110 ? "..." : ""}`)
+    .map((section) => {
+      const cleaned = section.content.replace(/\s+/g, " ").trim();
+      const snippet = cleaned.slice(0, 110) + (cleaned.length > 110 ? "..." : "");
+      return `- **${escapeMarkdown(section.title)}** — ${escapeMarkdown(snippet)}`;
+    })
     .join("\n");
 
   return {
@@ -323,8 +335,8 @@ function createFallbackExplanation(sectionTitle: string, sectionContent: string)
   const snippet = truncateAtWordBoundary(sectionContent, 200);
 
   const paragraphs = [
-    `**${sectionTitle}** is a core idea in this section — worth understanding well, since it's the foundation for what comes next.`,
-    snippet && `> ${snippet}`,
+    `**${escapeMarkdown(sectionTitle)}** is a core idea in this section — worth understanding well, since it's the foundation for what comes next.`,
+    snippet && `> ${escapeMarkdown(snippet)}`,
     `**Memory hook:** picture it as a **${strategy}** — that connection makes it easier to recall later.`,
   ].filter(Boolean);
 

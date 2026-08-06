@@ -335,7 +335,7 @@ const LanguageContext = createContext<LanguageContextValue | null>(null);
 
 function interpolate(template: string, vars?: Record<string, string | number>): string {
   if (!vars) return template;
-  return Object.entries(vars).reduce((acc, [key, value]) => acc.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), String(value)), template);
+  return Object.entries(vars).reduce((acc, [key, value]) => acc.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), () => String(value)), template);
 }
 
 // Persisted language is external state (localStorage), read via
