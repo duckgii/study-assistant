@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { buildPrompt } from "@/lib/prompts";
-import { createConceptQuiz, createReviewQuiz } from "@/lib/quizGenerator";
+import { createConceptQuiz, createReviewQuiz, shuffle } from "@/lib/quizGenerator";
 import { assessSectionRelevance, hasVisualContent, isUnreliableText } from "@/lib/contentGate";
 
 const GEMINI_MODEL = "gemini-flash-lite-latest";
@@ -365,7 +365,13 @@ function normalizeQuizItems(raw: unknown, idPrefix: string): QuizItem[] | null {
 
     const type: QuizItem["type"] = item.type === "true-false" || item.type === "short-answer" ? item.type : "multiple-choice";
     const difficulty: QuizItem["difficulty"] = item.difficulty === "easy" || item.difficulty === "hard" ? item.difficulty : "medium";
-    const options = type === "multiple-choice" && Array.isArray(item.options) ? item.options.filter((option): option is string => typeof option === "string" && option.trim().length > 0) : undefined;
+    // Models are heavily biased toward listing the correct answer first (or
+    // otherwise not at random) — shuffle so the correct option lands on a
+    // random position instead of stacking up on "1번" across quizzes.
+    const options =
+      type === "multiple-choice" && Array.isArray(item.options)
+        ? shuffle(item.options.filter((option): option is string => typeof option === "string" && option.trim().length > 0))
+        : undefined;
 
     if (type === "multiple-choice" && (!options || options.length < 2)) return;
 
